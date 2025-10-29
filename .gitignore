@@ -1,0 +1,7 @@
+# Windows
+Thumbs.db
+*.tmp
+*.log
+
+# Archivos temporales
+~*
