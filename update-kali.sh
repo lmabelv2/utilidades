@@ -1,44 +1,69 @@
 #!/bin/bash
 set -euo pipefail
 
-# actualiza kali a la ultima version rolling
-## Colores para salida más clara
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # Sin color
+# Actualiza Kali Linux a la última versión rolling
+GREEN='\033[0;32m'YELLOW='\033[1;33m'RED='\033[0;31m'NC='\033[0m'
 
-echo -e "${YELLOW} Iniciando actualización de Kali Linux a la última versión rolling... ${NC}"
-echo -e "${YELLOW} Versión actual: ${NC}"
-cat /etc/os-release | grep "VERSION="
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        echo -e "${RED}Este script debe ejecutarse con sudo${NC}"
+        exit 1
+    fi
+}
 
-# (Después del reinicio, podés verificar la versión con:
-# cat /etc/os-release | grep "VERSION=")
+check_kali() {
+    if ! grep -q "Kali" /etc/os-release; then
+        echo -e "${RED}Este script es solo para Kali Linux${NC}"
+        exit 1
+    fi
+}
 
-# Actualizando lista de paquetes ... ${NC}"
+check_internet() {
+    if ! ping -c1 http.kali.org &>/dev/null; then
+        echo -e "${RED}Sin conexión a internet o repositorio Kali${NC}"
+        exit 1
+    fi
+}
 
-echo -e "${YELLOW] Verificando version actual ... ${NC}"
-cat /etc/os-release | grep "VERSION="
+main() {
+    check_root
+    check_kali
+    check_internet
 
-echo -e "${YELLOW}Configurando repositorios oficiales...${NC}"
-sudo bash -c 'cat > /etc/apt/sources.list << EOF
-deb http://http.kali.org/kali kali-rolling main non-free non-free-firmware contrib
-EOF'
+    echo -e "${YELLOW}Iniciando actualización de Kali Linux a la última versión rolling...${NC}"
+    
+    echo -e "${YELLOW}Versión actual:${NC}"
+    cat /etc/os-release | grep "VERSION="
 
-echo -e "${YELLOW}Actualizando lista de paquetes...${NC}"
-sudo apt update -y
+    echo -e "${YELLOW}Creando backup de sources.list...${NC}"
+    cp /etc/apt/sources.list /etc/apt/sources.list.bak
+    echo -e "${GREEN}✅ Backup creado: /etc/apt/sources.list.bak${NC}"
 
-echo -e "${YELLOW}Ejecutando actualización completa...${NC}"
-sudo apt full-upgrade -y
+    echo -e "${YELLOW}Configurando repositorios oficiales Kali...${NC}"
+    cat > /etc/apt/sources.list << EOF
+deb http://http.kali.org/kali kali-rolling main contrib non-free non-free-firmware
+EOF
 
-echo -e "${YELLOW}Limpiando paquetes obsoletos...${NC}"
-sudo apt autoremove --purge -y
-sudo apt clean
+    echo -e "${YELLOW}Actualizando lista de paquetes...${NC}"
+    apt update -y
 
-echo -e "${GREEN}Actualización completada.${NC}"
-echo -e "${YELLOW}Reiniciando el sistema en 10 segundos... (Ctrl+C para cancelar)${NC}"
-sleep 10
-# Si prefieres confirmación interactiva en lugar de reinicio automático:
-read -r -p "Presionar Enter para reiniciar ahora o Ctrl+C para cancelar..."
-sudo reboot
-# ...existing code...
+    echo -e "${YELLOW}Ejecutando dist-upgrade (recomendado por docs oficiales Kali)...${NC}"
+    apt dist-upgrade -y
+
+    echo -e "${YELLOW}Limpiando paquetes obsoletos...${NC}"
+    apt autoremove --purge -y
+    apt autoclean
+    apt clean
+
+    echo -e "${GREEN}✅ Actualización completada exitosamente${NC}"
+    
+    if [[ -f /var/run/reboot-required ]]; then
+        echo -e "${YELLOW}🔄 Reinicio requerido detectado (/var/run/reboot-required)${NC}"
+    fi
+
+    echo -e "${YELLOW}Presiona Enter para reiniciar ahora o Ctrl+C para cancelar...${NC}"
+    read -r
+    reboot
+}
+
+main "$@"
