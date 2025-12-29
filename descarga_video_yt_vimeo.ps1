@@ -2,6 +2,7 @@
 pip install --upgrade yt-dlp
 
 # Ruta con los enlaces
+# Si da error hay que volver a descargar las cookies
 $LinksFile = "C:\Users\mabel\devops\Utilidades\links.txt"
 $urls = Get-Content $LinksFile
 
