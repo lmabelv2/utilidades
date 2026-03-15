@@ -60,10 +60,10 @@ foreach ($url in $urls) {
         Write-Host "=== Descargando VIMEO (modo protegido) ===" -ForegroundColor Yellow
 
         yt-dlp `
-            --cookies "C:\tools\cookies.txt" `
+            --cookies 'C:\tools\cookies.txt' `
             --no-playlist `
             --merge-output-format mp4 `
-            -f "bv*[height<=720]+ba/b" `
+            -f 'bv*[height<=720]+ba/b' `
             -o $output `
             $url
 
@@ -80,7 +80,7 @@ foreach ($url in $urls) {
         Write-Host "=== Descargando YouTube ===" -ForegroundColor Green
 
         yt-dlp `
-            -f "bv*+ba/b" `
+            -f 'bv*+ba/b' `
             --merge-output-format mp4 `
             -o $output `
             $url

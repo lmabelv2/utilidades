@@ -1,0 +1,126 @@
+{
+  "name": "Generador Documentación Técnica a Notion",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "start",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "requerimiento",
+              "value": "Sistema web para gestión de turnos médicos con login, dashboard admin y notificaciones por email."
+            }
+          ]
+        }
+      },
+      "id": "input",
+      "name": "Input Requerimiento",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"model\": \"llama3-70b-8192\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres un arquitecto de software. Devuelve SIEMPRE un JSON con esta estructura: { epic_title: string, epic_description: string, tasks: [ { title: string, description: string, type: UI | API | Database | Testing, priority: Alta | Media | Baja } ] }\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{$json[\"requerimiento\"]}}\n    }\n  ],\n  \"temperature\": 0.2\n}"
+      },
+      "id": "groq",
+      "name": "Groq AI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [600, 300],
+      "headers": {
+        "Authorization": "Bearer GROQ_API_KEY",
+        "Content-Type": "application/json"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const content = $json.choices[0].message.content;\nreturn [{ json: JSON.parse(content) }];"
+      },
+      "id": "parse",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "databaseId": "30ab86be733280dc9827e5bbd2929364",
+        "properties": {
+          "Título": "={{$json[\"epic_title\"]}}",
+          "Estado": "Por Hacer",
+          "Descripción": "={{$json[\"epic_description\"]}}"
+        }
+      },
+      "id": "createEpic",
+      "name": "Crear Épica",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const epicId = $json.id;\nconst tasks = $items(\"Parse JSON\", 0)[0].json.tasks;\nreturn tasks.map(task => ({ json: { ...task, epicId } }));"
+      },
+      "id": "splitTasks",
+      "name": "Split Tareas",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "databaseId": "30ab86be7332806696f6e089800c4e6b",
+        "properties": {
+          "Título": "={{$json[\"title\"]}}",
+          "Descripción": "={{$json[\"description\"]}}",
+          "Tipo": "={{$json[\"type\"]}}",
+          "Prioridad": "={{$json[\"priority\"]}}",
+          "Estado": "To Do",
+          "Épica": "={{[$json[\"epicId\"]]}}"
+        }
+      },
+      "id": "createTask",
+      "name": "Crear Tarea",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [1400, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Input Requerimiento", "type": "main", "index": 0 }]]
+    },
+    "Input Requerimiento": {
+      "main": [[{ "node": "Groq AI", "type": "main", "index": 0 }]]
+    },
+    "Groq AI": {
+      "main": [[{ "node": "Parse JSON", "type": "main", "index": 0 }]]
+    },
+    "Parse JSON": {
+      "main": [[{ "node": "Crear Épica", "type": "main", "index": 0 }]]
+    },
+    "Crear Épica": {
+      "main": [[{ "node": "Split Tareas", "type": "main", "index": 0 }]]
+    },
+    "Split Tareas": {
+      "main": [[{ "node": "Crear Tarea", "type": "main", "index": 0 }]]
+    }
+  }
+}

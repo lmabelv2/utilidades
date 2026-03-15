@@ -1,0 +1,297 @@
+{
+  "name": "Generador Automático de Épicas y Tareas",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Generador de Épicas",
+        "formDescription": "Ingresa el requerimiento del cliente",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Requerimiento",
+              "fieldType": "textarea",
+              "requiredField": true,
+              "fieldId": "requerimiento"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "formulario-entrada",
+      "name": "Formulario de Entrada",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "form-webhook"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.1-70b-versatile",
+        "options": {
+          "systemMessage": "Sos un arquitecto de software. Tu tarea es analizar requerimientos de cliente y generar documentación estructurada.\n\nDado un requerimiento, genera un JSON con esta estructura exacta:\n\n{\n  \"titulo\": \"Título de la épica\",\n  \"descripcion\": \"Descripción detallada\",\n  \"userStories\": [\n    \"Como [usuario] quiero [funcionalidad] para [beneficio]\"\n  ],\n  \"consideracionesTecnicas\": [\n    \"Consideración técnica 1\",\n    \"Consideración técnica 2\"\n  ],\n  \"diagramaMermaid\": \"graph TD\\n    A[Inicio] --> B[Proceso]\\n    B --> C[Fin]\",\n  \"tareas\": [\n    {\n      \"titulo\": \"Título de la tarea\",\n      \"descripcion\": \"Descripción\",\n      \"tipo\": \"UI\" | \"API\" | \"Database\" | \"Testing\",\n      \"prioridad\": \"Alta\" | \"Media\" | \"Baja\"\n    }\n  ]\n}\n\nGenera SOLO el JSON, sin texto adicional."
+        },
+        "prompt": "={{ $json.requerimiento }}"
+      },
+      "id": "agente-ia",
+      "name": "Agente IA (Groq)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1,
+      "position": [470, 300],
+      "credentials": {
+        "groqApi": {
+          "id": "groq-credentials",
+          "name": "Groq API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear el JSON de la respuesta de IA\nconst items = [];\n\nfor (const item of $input.all()) {\n  try {\n    let texto = item.json.text || item.json.response || item.json.output;\n    \n    // Limpiar el texto si viene con markdown\n    texto = texto.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    \n    // Parsear el JSON\n    const datos = JSON.parse(texto);\n    \n    items.push({\n      json: datos\n    });\n  } catch (error) {\n    throw new Error(`Error parseando JSON: ${error.message}`);\n  }\n}\n\nreturn items;"
+      },
+      "id": "parser-json",
+      "name": "Parser JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "resource": "page",
+        "databaseId": {
+          "__rl": true,
+          "value": "30ab86be733280dc9827e5bbd2929364",
+          "mode": "id"
+        },
+        "title": "={{ $json.titulo }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Estado",
+              "status": "Por Hacer"
+            },
+            {
+              "key": "Descripción",
+              "richText": "={{ $json.descripcion }}"
+            }
+          ]
+        },
+        "blockUi": {
+          "blockValues": [
+            {
+              "type": "heading_2",
+              "heading_2": {
+                "text": "📖 User Stories"
+              }
+            },
+            {
+              "type": "bulleted_list_item",
+              "text": "={{ $json.userStories.join('\\n') }}"
+            },
+            {
+              "type": "heading_2",
+              "heading_2": {
+                "text": "⚙️ Consideraciones Técnicas"
+              }
+            },
+            {
+              "type": "bulleted_list_item",
+              "text": "={{ $json.consideracionesTecnicas.join('\\n') }}"
+            },
+            {
+              "type": "heading_2",
+              "heading_2": {
+                "text": "📊 Diagrama de Flujo"
+              }
+            },
+            {
+              "type": "code",
+              "code": {
+                "language": "mermaid",
+                "text": "={{ $json.diagramaMermaid }}"
+              }
+            }
+          ]
+        }
+      },
+      "id": "crear-epica-notion",
+      "name": "Crear Épica en Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [910, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credentials",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "tareas",
+        "options": {}
+      },
+      "id": "split-tareas",
+      "name": "Split Tareas",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1130, 300]
+    },
+    {
+      "parameters": {
+        "resource": "page",
+        "databaseId": {
+          "__rl": true,
+          "value": "30ab86be7332806696f6e089800c4e6b",
+          "mode": "id"
+        },
+        "title": "={{ $json.titulo }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Descripción",
+              "richText": "={{ $json.descripcion }}"
+            },
+            {
+              "key": "Tipo",
+              "select": "={{ $json.tipo }}"
+            },
+            {
+              "key": "Prioridad",
+              "select": "={{ $json.prioridad }}"
+            },
+            {
+              "key": "Estado",
+              "status": "To Do"
+            }
+          ]
+        }
+      },
+      "id": "crear-tarea-notion",
+      "name": "Crear Tarea en Notion",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [1350, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credentials",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "properties",
+              "value": "={{ { \"Épica\": { \"relation\": [{ \"id\": $('Crear Épica en Notion').item.json.id }] } } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "vincular-tarea-epica",
+      "name": "Vincular Tarea con Épica",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1570, 300],
+      "credentials": {
+        "notionApi": {
+          "id": "notion-credentials",
+          "name": "Notion API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Formulario de Entrada": {
+      "main": [
+        [
+          {
+            "node": "Agente IA (Groq)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente IA (Groq)": {
+      "main": [
+        [
+          {
+            "node": "Parser JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser JSON": {
+      "main": [
+        [
+          {
+            "node": "Crear Épica en Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Épica en Notion": {
+      "main": [
+        [
+          {
+            "node": "Split Tareas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Tareas": {
+      "main": [
+        [
+          {
+            "node": "Crear Tarea en Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Tarea en Notion": {
+      "main": [
+        [
+          {
+            "node": "Vincular Tarea con Épica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-02-17T00:00:00.000Z",
+  "versionId": "1"
+}
